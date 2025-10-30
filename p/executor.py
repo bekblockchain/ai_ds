@@ -1,9 +1,9 @@
 import time
 from config import TRADE_CONFIG, SUPPORTED_SYMBOLS, get_trade_amount
-from exchange_api import can_open_new_trade
+from exchange_api import can_open_new_trade, create_stop_loss_order, create_take_profit_order, cancel_stop_orders, check_stop_orders_status
 
 def execute_trade(exchange, risk_manager, signal_data, price_data):
-    """执行交易"""
+    """执行交易并设置止损单"""
     from exchange_api import get_current_position
     
     symbol = price_data['symbol']
@@ -11,22 +11,18 @@ def execute_trade(exchange, risk_manager, signal_data, price_data):
     current_price = price_data['price']
     symbol_name = SUPPORTED_SYMBOLS[symbol]['name']
 
-    print(f"\n🎯 {symbol_name}({symbol}) 交易分析:")
+    print(f"\n🎯 {symbol_name}({symbol}) 交易执行:")
     print(f"📊 交易信号: {signal_data['signal']}")
     print(f"💪 信心程度: {signal_data['confidence']}")
     print(f"📝 理由: {signal_data['reason']}")
     
+    # 显示止损单状态
+    stop_order_status = check_stop_orders_status(exchange, symbol)
+    print(f"🛡️ 止损单状态: {stop_order_status}")
+    
     # 显示风险摘要
     risk_summary = risk_manager.get_risk_summary(current_position, current_price)
     print(risk_summary)
-    
-    # 打印技术指标状态
-    if 'technical_indicators' in signal_data:
-        print("【技术指标状态】")
-        tech_indicators = signal_data['technical_indicators']
-        for indicator_name, indicator_data in tech_indicators.items():
-            if 'signal' in indicator_data:
-                print(f"  {indicator_name.upper()}: {indicator_data['signal']}")
 
     if TRADE_CONFIG['test_mode']:
         print("🧪 测试模式 - 仅模拟交易")
@@ -39,55 +35,111 @@ def execute_trade(exchange, risk_manager, signal_data, price_data):
         if signal_data['signal'] == 'BUY':
             if current_position and current_position['side'] == 'short':
                 print("🔄 平空仓...")
+                # 先取消空仓的止损单
+                cancel_stop_orders(exchange, symbol)
+                # 执行平仓
                 exchange.create_market_buy_order(
                     symbol,
                     current_position['size'],
                     {'posSide': 'short'}
                 )
+                print("✅ 空仓已平")
+                
             elif not current_position and can_trade:
-                # 开多仓
+                # 开多仓并设置止损
                 trade_amount = get_trade_amount(symbol)
                 print(f"📈 开多仓，数量: {trade_amount}...")
-                exchange.create_market_buy_order(
+                order = exchange.create_market_buy_order(
                     symbol,
                     trade_amount,
                     {'posSide': 'long'}
                 )
+                print("✅ 多仓已开")
+                
+                # 获取实际成交价格
+                entry_price = current_price
+                if order and 'average' in order and order['average']:
+                    entry_price = order['average']
+                
+                # 立即设置止损单
+                create_stop_loss_order(exchange, symbol, 'long', trade_amount, entry_price)
+                # 可选：设置止盈单
+                # create_take_profit_order(exchange, symbol, 'long', trade_amount, entry_price)
+                
             elif current_position and current_position['side'] == 'long':
                 print("✅ 已持有多仓，保持持仓")
+                # 检查止损单是否仍然有效
+                stop_order_status = check_stop_orders_status(exchange, symbol)
+                if "无活跃止损单" in stop_order_status or "已触发" in stop_order_status:
+                    print("🔄 重新设置止损单...")
+                    create_stop_loss_order(exchange, symbol, 'long', current_position['size'], current_position['entry_price'])
             else:
                 print("🚫 持仓已满，无法开新仓")
 
         elif signal_data['signal'] == 'SELL':
             if current_position and current_position['side'] == 'long':
                 print("🔄 平多仓...")
+                # 先取消多仓的止损单
+                cancel_stop_orders(exchange, symbol)
+                # 执行平仓
                 exchange.create_market_sell_order(
                     symbol,
                     current_position['size'],
                     {'posSide': 'long'}
                 )
+                print("✅ 多仓已平")
+                
             elif not current_position and can_trade:
-                # 开空仓
+                # 开空仓并设置止损
                 trade_amount = get_trade_amount(symbol)
                 print(f"📉 开空仓，数量: {trade_amount}...")
-                exchange.create_market_sell_order(
+                order = exchange.create_market_sell_order(
                     symbol,
                     trade_amount,
                     {'posSide': 'short'}
                 )
+                print("✅ 空仓已开")
+                
+                # 获取实际成交价格
+                entry_price = current_price
+                if order and 'average' in order and order['average']:
+                    entry_price = order['average']
+                
+                # 立即设置止损单
+                create_stop_loss_order(exchange, symbol, 'short', trade_amount, entry_price)
+                # 可选：设置止盈单
+                # create_take_profit_order(exchange, symbol, 'short', trade_amount, entry_price)
+                
             elif current_position and current_position['side'] == 'short':
                 print("✅ 已持有空仓，保持持仓")
+                # 检查止损单是否仍然有效
+                stop_order_status = check_stop_orders_status(exchange, symbol)
+                if "无活跃止损单" in stop_order_status or "已触发" in stop_order_status:
+                    print("🔄 重新设置止损单...")
+                    create_stop_loss_order(exchange, symbol, 'short', current_position['size'], current_position['entry_price'])
             else:
                 print("🚫 持仓已满，无法开新仓")
 
         elif signal_data['signal'] == 'HOLD':
             print("⏸️ 建议观望，不执行交易")
+            # 如果有持仓，确保止损单有效
+            if current_position:
+                stop_order_status = check_stop_orders_status(exchange, symbol)
+                if "无活跃止损单" in stop_order_status or "已触发" in stop_order_status:
+                    print("🔄 重新设置止损单...")
+                    create_stop_loss_order(exchange, symbol, current_position['side'], current_position['size'], current_position['entry_price'])
             return
 
-        print("✅ 订单执行成功")
+        print("✅ 交易执行完成")
         time.sleep(2)
+        
+        # 验证持仓和止损单状态
         position = get_current_position(exchange, symbol)
+        stop_order_status = check_stop_orders_status(exchange, symbol)
         print(f"📋 更新后持仓: {position}")
+        print(f"🛡️ 止损单状态: {stop_order_status}")
 
     except Exception as e:
-        print(f"❌ {symbol}订单执行失败: {e}")
+        print(f"❌ {symbol}交易执行失败: {e}")
+        # 交易失败时取消可能已创建的止损单
+        cancel_stop_orders(exchange, symbol)

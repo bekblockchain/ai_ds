@@ -43,11 +43,11 @@ SUPPORTED_SYMBOLS = {
 TRADE_CONFIG = {
     'symbols': ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'DOGE/USDT', 'BCH/USDT'],
     'leverage': 10,
-    'timeframe': '15m',  # 保持15分钟策略周期
+    'timeframe': '15m',
     'test_mode': False,
     'max_concurrent_trades': 3,
-    'execution_interval': 5,  # 执行间隔（秒）- 仅用于风险监控
-    'analysis_interval': 900,  # 分析间隔（秒）- 15分钟，保持策略一致性
+    'execution_interval': 5,
+    'analysis_interval': 900,
 }
 
 # 止盈止损配置
@@ -59,6 +59,8 @@ RISK_MANAGEMENT = {
     'max_position_size': 0.01,
     'risk_per_trade': 0.02,
     'daily_loss_limit': 0.1,
+    'immediate_stop_loss': True,  # 开仓时立即设置止损单
+    'stop_loss_type': 'market',  # 市价止损，确保成交
 }
 
 # 技术指标插槽配置
@@ -66,28 +68,28 @@ TECHNICAL_INDICATORS = {
     'ma': {
         'enabled': True,
         'name': '移动平均线',
-        'periods': [5, 10, 20],  # 基于15分钟K线的20周期 = 5小时趋势
+        'periods': [5, 10, 20],
         'description': '识别趋势方向和拐点'
     },
     'boll': {
         'enabled': True,
         'name': '布林带',
-        'period': 20,  # 基于15分钟K线的20周期
+        'period': 20,
         'std_dev': 2,
         'description': '识别突破和超买超卖'
     },
     'rsi': {
         'enabled': True,
         'name': '相对强弱指数',
-        'period': 14,  # 基于15分钟K线的14周期
+        'period': 14,
         'description': '识别超买超卖区域'
     },
     'macd': {
         'enabled': True,
         'name': 'MACD',
-        'fast_period': 12,    # 基于15分钟K线
-        'slow_period': 26,    # 基于15分钟K线
-        'signal_period': 9,   # 基于15分钟K线
+        'fast_period': 12,
+        'slow_period': 26,
+        'signal_period': 9,
         'description': '识别趋势动量和转折'
     },
     'volume': {
@@ -103,7 +105,8 @@ signal_history = {}
 technical_history = {}
 position_history = {}
 daily_performance = {}
-last_analysis_time = {}  # 记录每个币种上次分析时间
+last_analysis_time = {}
+active_stop_orders = {}  # 活跃的止损单记录
 
 def init_deepseek_client():
     """初始化DeepSeek客户端"""
@@ -148,3 +151,5 @@ def initialize_symbol_data(symbol):
         }
     if symbol not in last_analysis_time:
         last_analysis_time[symbol] = 0
+    if symbol not in active_stop_orders:
+        active_stop_orders[symbol] = None

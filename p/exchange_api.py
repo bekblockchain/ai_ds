@@ -1,4 +1,4 @@
-from config import TRADE_CONFIG, RISK_MANAGEMENT, position_history, SUPPORTED_SYMBOLS, initialize_symbol_data
+from config import TRADE_CONFIG, RISK_MANAGEMENT, position_history, SUPPORTED_SYMBOLS, initialize_symbol_data, active_stop_orders
 from datetime import datetime
 
 def setup_exchange(exchange):
@@ -27,10 +27,8 @@ def get_current_position(exchange, symbol=None):
     """获取当前持仓情况"""
     try:
         if symbol:
-            # 获取指定币种的持仓
             symbols = [symbol]
         else:
-            # 获取所有启用币种的持仓
             symbols = [s for s in TRADE_CONFIG['symbols'] if SUPPORTED_SYMBOLS[s]['enabled']]
         
         all_positions = []
@@ -58,7 +56,6 @@ def get_current_position(exchange, symbol=None):
                             unrealized_pnl = float(pos.get('unrealizedPnl', 0))
                             position_value = abs(position_amt) * entry_price
                             
-                            # 计算盈亏百分比
                             if entry_price > 0:
                                 pnl_percent = (unrealized_pnl / (position_value / TRADE_CONFIG['leverage'])) * 100
                             else:
@@ -75,7 +72,6 @@ def get_current_position(exchange, symbol=None):
                                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                             }
                             
-                            # 记录持仓历史
                             record_position_history(position_info)
                             all_positions.append(position_info)
                             
@@ -97,20 +93,192 @@ def record_position_history(position_info):
     symbol = position_info['symbol']
     initialize_symbol_data(symbol)
     position_history[symbol].append(position_info)
-    # 只保留最近100条记录
     if len(position_history[symbol]) > 100:
         position_history[symbol].pop(0)
 
-def get_active_positions_count(exchange):
-    """获取活跃持仓数量"""
-    positions = get_current_position(exchange)
-    return len(positions) if positions else 0
+def create_stop_loss_order(exchange, symbol, side, size, entry_price):
+    """创建止损单"""
+    try:
+        if not RISK_MANAGEMENT['immediate_stop_loss']:
+            return None
+            
+        stop_loss_price = calculate_stop_loss_price(entry_price, side)
+        
+        print(f"🚨 为{symbol}创建止损单:")
+        print(f"   方向: {side}")
+        print(f"   数量: {size}")
+        print(f"   入场价: {entry_price:.4f}")
+        print(f"   止损价: {stop_loss_price:.4f}")
+        
+        if RISK_MANAGEMENT['stop_loss_type'] == 'market':
+            # 市价止损单
+            if side == 'long':
+                # 多仓止损：当价格跌到止损价时市价卖出
+                order = exchange.create_order(
+                    symbol,
+                    'STOP_MARKET',
+                    'sell',
+                    size,
+                    None,
+                    {
+                        'stopPrice': stop_loss_price,
+                        'reduceOnly': True,
+                        'positionSide': 'LONG'
+                    }
+                )
+            else:
+                # 空仓止损：当价格涨到止损价时市价买入
+                order = exchange.create_order(
+                    symbol,
+                    'STOP_MARKET',
+                    'buy',
+                    size,
+                    None,
+                    {
+                        'stopPrice': stop_loss_price,
+                        'reduceOnly': True,
+                        'positionSide': 'SHORT'
+                    }
+                )
+        else:
+            # 限价止损单
+            if side == 'long':
+                order = exchange.create_order(
+                    symbol,
+                    'STOP',
+                    'sell',
+                    size,
+                    stop_loss_price * 0.995,  # 略低于止损价确保成交
+                    {
+                        'stopPrice': stop_loss_price,
+                        'reduceOnly': True,
+                        'positionSide': 'LONG'
+                    }
+                )
+            else:
+                order = exchange.create_order(
+                    symbol,
+                    'STOP',
+                    'buy',
+                    size,
+                    stop_loss_price * 1.005,  # 略高于止损价确保成交
+                    {
+                        'stopPrice': stop_loss_price,
+                        'reduceOnly': True,
+                        'positionSide': 'SHORT'
+                    }
+                )
+        
+        print(f"✅ 止损单创建成功，订单ID: {order['id']}")
+        
+        # 记录活跃止损单
+        active_stop_orders[symbol] = {
+            'order_id': order['id'],
+            'symbol': symbol,
+            'side': side,
+            'size': size,
+            'stop_price': stop_loss_price,
+            'entry_price': entry_price,
+            'created_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        return order
+        
+    except Exception as e:
+        print(f"❌ 创建止损单失败: {e}")
+        return None
 
-def can_open_new_trade(exchange):
-    """检查是否可以开新仓"""
-    active_positions = get_active_positions_count(exchange)
-    return active_positions < TRADE_CONFIG['max_concurrent_trades']
+def create_take_profit_order(exchange, symbol, side, size, entry_price):
+    """创建止盈单"""
+    try:
+        take_profit_price = calculate_take_profit_price(entry_price, side)
+        
+        print(f"🎯 为{symbol}创建止盈单:")
+        print(f"   方向: {side}")
+        print(f"   数量: {size}")
+        print(f"   入场价: {entry_price:.4f}")
+        print(f"   止盈价: {take_profit_price:.4f}")
+        
+        if side == 'long':
+            # 多仓止盈：当价格涨到止盈价时市价卖出
+            order = exchange.create_order(
+                symbol,
+                'TAKE_PROFIT_MARKET',
+                'sell',
+                size,
+                None,
+                {
+                    'stopPrice': take_profit_price,
+                    'reduceOnly': True,
+                    'positionSide': 'LONG'
+                }
+            )
+        else:
+            # 空仓止盈：当价格跌到止盈价时市价买入
+            order = exchange.create_order(
+                symbol,
+                'TAKE_PROFIT_MARKET',
+                'buy',
+                size,
+                None,
+                {
+                    'stopPrice': take_profit_price,
+                    'reduceOnly': True,
+                    'positionSide': 'SHORT'
+                }
+            )
+        
+        print(f"✅ 止盈单创建成功，订单ID: {order['id']}")
+        return order
+        
+    except Exception as e:
+        print(f"❌ 创建止盈单失败: {e}")
+        return None
 
+def cancel_stop_orders(exchange, symbol):
+    """取消指定币种的所有止损止盈单"""
+    try:
+        if symbol in active_stop_orders and active_stop_orders[symbol]:
+            order_id = active_stop_orders[symbol]['order_id']
+            try:
+                exchange.cancel_order(order_id, symbol)
+                print(f"✅ 取消{symbol}止损单: {order_id}")
+            except Exception as e:
+                print(f"⚠️ 取消止损单失败（可能已触发）: {e}")
+            
+            active_stop_orders[symbol] = None
+            
+        # 同时取消所有开仓方向的止损止盈单
+        open_orders = exchange.fetch_open_orders(symbol)
+        for order in open_orders:
+            if order['type'] in ['STOP_MARKET', 'STOP', 'TAKE_PROFIT_MARKET']:
+                try:
+                    exchange.cancel_order(order['id'], symbol)
+                    print(f"✅ 取消{symbol}条件单: {order['id']}")
+                except Exception as e:
+                    print(f"⚠️ 取消条件单失败: {e}")
+                    
+    except Exception as e:
+        print(f"❌ 取消{symbol}止损单失败: {e}")
+
+def check_stop_orders_status(exchange, symbol):
+    """检查止损单状态"""
+    try:
+        if symbol not in active_stop_orders or not active_stop_orders[symbol]:
+            return "无活跃止损单"
+            
+        order_info = active_stop_orders[symbol]
+        try:
+            order = exchange.fetch_order(order_info['order_id'], symbol)
+            return f"状态: {order['status']}, 止损价: {order_info['stop_price']:.4f}"
+        except Exception as e:
+            # 订单可能已成交或取消
+            return f"订单可能已触发: {str(e)}"
+            
+    except Exception as e:
+        return f"检查失败: {str(e)}"
+
+# 原有的计算函数保持不变
 def calculate_position_metrics(position_info, current_price):
     """计算持仓指标"""
     if not position_info:
@@ -120,19 +288,16 @@ def calculate_position_metrics(position_info, current_price):
     side = position_info['side']
     size = position_info['size']
     
-    # 计算当前盈亏
     if side == 'long':
         pnl = (current_price - entry_price) * size
         pnl_percent = ((current_price - entry_price) / entry_price) * 100 * TRADE_CONFIG['leverage']
-    else:  # short
+    else:
         pnl = (entry_price - current_price) * size
         pnl_percent = ((entry_price - current_price) / entry_price) * 100 * TRADE_CONFIG['leverage']
     
-    # 计算风险指标
     stop_loss_price = calculate_stop_loss_price(entry_price, side)
     take_profit_price = calculate_take_profit_price(entry_price, side)
     
-    # 距离止损/止盈的百分比
     if side == 'long':
         stop_loss_distance = ((current_price - stop_loss_price) / current_price) * 100
         take_profit_distance = ((take_profit_price - current_price) / current_price) * 100
@@ -154,38 +319,24 @@ def calculate_stop_loss_price(entry_price, side):
     """计算止损价格"""
     if side == 'long':
         return entry_price * (1 - RISK_MANAGEMENT['stop_loss_percent'] / 100 / TRADE_CONFIG['leverage'])
-    else:  # short
+    else:
         return entry_price * (1 + RISK_MANAGEMENT['stop_loss_percent'] / 100 / TRADE_CONFIG['leverage'])
 
 def calculate_take_profit_price(entry_price, side):
     """计算止盈价格"""
     if side == 'long':
         return entry_price * (1 + RISK_MANAGEMENT['take_profit_percent'] / 100 / TRADE_CONFIG['leverage'])
-    else:  # short
+    else:
         return entry_price * (1 - RISK_MANAGEMENT['take_profit_percent'] / 100 / TRADE_CONFIG['leverage'])
 
 def check_stop_loss_condition(position_metrics):
     """检查止损条件"""
     if not position_metrics:
         return False
-        
-    # 检查是否触及止损
-    if position_metrics['current_pnl_percent'] <= -RISK_MANAGEMENT['stop_loss_percent']:
-        return True
-    
-    # 检查紧急止损
-    if position_metrics['current_pnl_percent'] <= -RISK_MANAGEMENT['emergency_stop_loss']:
-        return True
-        
-    return False
+    return position_metrics['current_pnl_percent'] <= -RISK_MANAGEMENT['stop_loss_percent']
 
 def check_take_profit_condition(position_metrics):
     """检查止盈条件"""
     if not position_metrics:
         return False
-        
-    # 检查是否触及止盈
-    if position_metrics['current_pnl_percent'] >= RISK_MANAGEMENT['take_profit_percent']:
-        return True
-        
-    return False
+    return position_metrics['current_pnl_percent'] >= RISK_MANAGEMENT['take_profit_percent']
