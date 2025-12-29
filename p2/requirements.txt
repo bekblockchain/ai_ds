@@ -1,0 +1,24 @@
+# 核心依赖
+ccxt>=4.2.0                 # 交易所API - 必须有版本号
+pandas>=2.0.0               # 数据处理 - 更新到稳定版本
+numpy>=1.24.0               # 🆕 缺失！pandas依赖numpy
+openai>=1.0.0               # DeepSeek API - 注意：新版本API有变化
+
+# 环境管理
+python-dotenv>=1.0.0        # 环境变量管理
+
+# 网络请求
+requests>=2.31.0            # HTTP请求
+aiohttp>=3.9.0              # 🆕 可选：异步请求支持
+
+# 调度（可选，你的main.py没用schedule）
+# schedule>=1.2.0           # ❌ 可以移除，你的main.py没用这个
+
+# 系统监控
+psutil>=5.9.0               # 🆕 缺失！config.py中使用了get_memory_usage()
+
+# 日期时间
+python-dateutil>=2.8.0      # 🆕 缺失！pandas的日期处理依赖
+
+# 数据序列化
+ujson>=5.8.0                # 🆕 可选：比json更快

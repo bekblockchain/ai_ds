@@ -9,8 +9,20 @@ def setup_exchange(exchange):
         for symbol in TRADE_CONFIG['symbols']:
             if SUPPORTED_SYMBOLS[symbol]['enabled']:
                 try:
-                    exchange.set_leverage(TRADE_CONFIG['leverage'], symbol)
-                    print(f"设置{symbol}杠杆倍数: {TRADE_CONFIG['leverage']}x")
+                    symbol_config = SUPPORTED_SYMBOLS[symbol]
+                    # 设置多仓杠杆
+                    exchange.set_leverage(
+                      symbol_config['leverage_long'],
+                      symbol,
+                      params={'marginMode': 'cross', 'positionSide': 'LONG'}
+                    )
+                    # 设置空仓杠杆
+                    exchange.set_leverage(
+                        symbol_config['leverage_short'],
+                        symbol,
+                        params={'marginMode': 'cross', 'positionSide': 'SHORT'}
+                    )
+                    print(f"设置{symbol}杠杆: 多仓{symbol_config['leverage_long']}x, 空仓{symbol_config['leverage_short']}x")
                 except Exception as e:
                     print(f"设置{symbol}杠杆失败: {e}")
         

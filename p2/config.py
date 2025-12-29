@@ -16,6 +16,8 @@ SUPPORTED_SYMBOLS = {
         'enabled': True,
         'volatility': 'high',  # 波动性标签
         'atr_multiplier': 1.0,  # ATR乘数用于计算止损
+        'leverage_long': 10,      # 🆕 做多杠杆倍数
+        'leverage_short': 10,    # 🆕 做空杠杆倍数
     },
     'ETH/USDT': {
         'name': '以太坊',
@@ -24,6 +26,8 @@ SUPPORTED_SYMBOLS = {
         'enabled': True,
         'volatility': 'medium',
         'atr_multiplier': 1.2,
+        'leverage_long': 10,      # 🆕 做多杠杆倍数
+        'leverage_short': 10,    # 🆕 做空杠杆倍数
     },
     'SOL/USDT': {
         'name': 'Solana',
@@ -32,6 +36,8 @@ SUPPORTED_SYMBOLS = {
         'enabled': True,
         'volatility': 'high',
         'atr_multiplier': 1.0,
+        'leverage_long': 5,      # 🆕 做多杠杆倍数
+        'leverage_short': 5,    # 🆕 做空杠杆倍数
     }
 }
 
