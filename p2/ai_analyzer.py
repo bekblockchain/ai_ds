@@ -179,6 +179,17 @@ def analyze_with_deepseek(deepseek_client, exchange, price_data, technical_indic
         signal_data['technical_indicators'] = technical_indicators
         signal_data['current_price'] = price_data['price']
         
+        # 确保signal_strength存在，如果缺失则根据confidence设置默认值
+        if 'signal_strength' not in signal_data:
+            # 根据confidence推断signal_strength
+            confidence = signal_data.get('confidence', 'MEDIUM')
+            if confidence == 'HIGH':
+                signal_data['signal_strength'] = 'STRONG'
+            elif confidence == 'LOW':
+                signal_data['signal_strength'] = 'WEAK'
+            else:
+                signal_data['signal_strength'] = 'MEDIUM'
+        
         # 如果是快速信号，标记为quick_signal
         if signal_data.get('signal_strength') == 'STRONG':
             signal_data['quick_signal'] = True
@@ -191,8 +202,8 @@ def analyze_with_deepseek(deepseek_client, exchange, price_data, technical_indic
             signal_history[symbol].pop(0)
 
         print(f"✅ {symbol_name} AI分析完成:")
-        print(f"   信号: {signal_data['signal']} ({signal_data['signal_strength']})")
-        print(f"   信心: {signal_data['confidence']}")
+        print(f"   信号: {signal_data.get('signal', 'UNKNOWN')} ({signal_data.get('signal_strength', 'MEDIUM')})")
+        print(f"   信心: {signal_data.get('confidence', 'MEDIUM')}")
         print(f"   建议仓位: {signal_data.get('suggested_position_size', '标准')}")
         
         return signal_data
@@ -207,20 +218,24 @@ def analyze_with_deepseek(deepseek_client, exchange, price_data, technical_indic
 
 def merge_signals(ai_signal, hft_signal):
     """合并AI信号和高频策略信号"""
-    if not hft_signal or hft_signal['confidence'] != 'HIGH':
+    if not hft_signal or hft_signal.get('confidence') != 'HIGH':
         return ai_signal
     
     # 如果高频策略给出高信心信号
-    if hft_signal['confidence'] == 'HIGH':
+    if hft_signal.get('confidence') == 'HIGH':
         # 检查信号是否一致
-        if ai_signal.get('signal') == hft_signal['signal']:
+        if ai_signal.get('signal') == hft_signal.get('signal'):
             # 信号一致，增强信心
             ai_signal['confidence'] = 'HIGH'
+            ai_signal['signal_strength'] = hft_signal.get('signal_strength', 'STRONG')
             ai_signal['quick_signal'] = True
-            ai_signal['merged_reason'] = f"AI与高频策略一致: {hft_signal['reason']}"
+            ai_signal['merged_reason'] = f"AI与高频策略一致: {hft_signal.get('reason', '')}"
         else:
             # 信号冲突，优先使用高频信号
             ai_signal = hft_signal.copy()
+            # 确保signal_strength存在
+            if 'signal_strength' not in ai_signal:
+                ai_signal['signal_strength'] = 'STRONG'  # 高频策略高信心默认为STRONG
             ai_signal['merged_reason'] = "使用高频策略信号（高信心）"
             ai_signal['quick_signal'] = True
     

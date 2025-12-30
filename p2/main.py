@@ -1,5 +1,4 @@
 import time
-import schedule
 from datetime import datetime
 from datetime import datetime, timedelta
 from exchange_api import get_current_position

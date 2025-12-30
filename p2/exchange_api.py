@@ -5,7 +5,8 @@ from datetime import datetime
 def setup_exchange(exchange):
     """设置交易所参数 - 高频版本"""
     try:
-        # 为每个币种设置杠杆
+        # 为每个币种设置杠杆（如果API有权限）
+        leverage_set_success = True
         for symbol in TRADE_CONFIG['symbols']:
             if SUPPORTED_SYMBOLS[symbol]['enabled']:
                 try:
@@ -22,9 +23,18 @@ def setup_exchange(exchange):
                         symbol,
                         params={'marginMode': 'cross', 'positionSide': 'SHORT'}
                     )
-                    print(f"设置{symbol}杠杆: 多仓{symbol_config['leverage_long']}x, 空仓{symbol_config['leverage_short']}x")
+                    print(f"✅ 设置{symbol}杠杆: 多仓{symbol_config['leverage_long']}x, 空仓{symbol_config['leverage_short']}x")
                 except Exception as e:
-                    print(f"设置{symbol}杠杆失败: {e}")
+                    error_msg = str(e)
+                    if "Invalid API-key" in error_msg or "permissions" in error_msg.lower():
+                        print(f"⚠️ 设置{symbol}杠杆失败: API密钥无权限设置杠杆（这是正常的，杠杆可能已在交易所手动设置）")
+                        leverage_set_success = False
+                    else:
+                        print(f"⚠️ 设置{symbol}杠杆失败: {e}")
+                        leverage_set_success = False
+        
+        if not leverage_set_success:
+            print("💡 提示: 如果杠杆设置失败，请确保在交易所手动设置杠杆，或检查API密钥权限")
         
         # 获取余额
         balance = exchange.fetch_balance()

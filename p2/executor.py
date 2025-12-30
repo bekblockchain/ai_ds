@@ -1,6 +1,6 @@
 import time
 from exchange_api import (get_current_position, can_open_new_trade, 
-                         create_stop_loss_order, create_take_profit_order, 
+                         create_stop_loss_order, 
                          cancel_stop_orders, check_stop_orders_status, 
                          create_quick_stop_loss, create_quick_take_profit)
 
@@ -8,10 +8,6 @@ from exchange_api import (get_current_position, can_open_new_trade,
 from config import (TRADE_CONFIG, SUPPORTED_SYMBOLS, get_trade_amount, 
                    get_dynamic_position_size, update_hft_state, can_trade_hft,
                    RISK_MANAGEMENT)
-from exchange_api import (can_open_new_trade, create_stop_loss_order, 
-                         create_take_profit_order, cancel_stop_orders, 
-                         check_stop_orders_status, create_quick_stop_loss,
-                         create_quick_take_profit)
 
 def execute_trade(exchange, risk_manager, signal_data, price_data):
     """执行高频交易并设置快速止损单"""
@@ -70,7 +66,16 @@ def execute_trade(exchange, risk_manager, signal_data, price_data):
                     return
                 
                 # 动态计算仓位大小
-                signal_strength = signal_data.get('confidence', 'MEDIUM')
+                # 优先使用signal_strength，如果没有则根据confidence推断
+                signal_strength = signal_data.get('signal_strength')
+                if not signal_strength:
+                    confidence = signal_data.get('confidence', 'MEDIUM')
+                    if confidence == 'HIGH':
+                        signal_strength = 'STRONG'
+                    elif confidence == 'LOW':
+                        signal_strength = 'WEAK'
+                    else:
+                        signal_strength = 'MEDIUM'
                 trade_amount = get_dynamic_position_size(symbol, signal_strength)
                 
                 print(f"📈 开多仓，数量: {trade_amount}...")
@@ -131,7 +136,16 @@ def execute_trade(exchange, risk_manager, signal_data, price_data):
                     return
                 
                 # 动态计算仓位大小
-                signal_strength = signal_data.get('confidence', 'MEDIUM')
+                # 优先使用signal_strength，如果没有则根据confidence推断
+                signal_strength = signal_data.get('signal_strength')
+                if not signal_strength:
+                    confidence = signal_data.get('confidence', 'MEDIUM')
+                    if confidence == 'HIGH':
+                        signal_strength = 'STRONG'
+                    elif confidence == 'LOW':
+                        signal_strength = 'WEAK'
+                    else:
+                        signal_strength = 'MEDIUM'
                 trade_amount = get_dynamic_position_size(symbol, signal_strength)
                 
                 print(f"📉 开空仓，数量: {trade_amount}...")

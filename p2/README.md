@@ -90,7 +90,7 @@ MA7和MA10同向排列
 ### 🔧 安装与运行
 
 #### 环境设置
-pip install ccxt pandas python-dotenv openai
+pip3 install -r requirements.txt
 
 #### 配置文件
 创建 .env 文件：

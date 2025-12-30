@@ -126,7 +126,7 @@ HIGH_FREQUENCY_STATE = {
 # 全局变量
 price_history = {}
 signal_history = {}
-technical_history = {}
+technical_history = []  # 改为列表，因为代码中直接使用append
 position_history = {}
 daily_performance = {}
 last_analysis_time = {}
@@ -134,6 +134,7 @@ active_stop_orders = {}
 trade_count_today = 0  # 今日交易次数
 consecutive_losses = 0  # 连续亏损次数
 last_trade_result = None  # 上次交易结果
+
 
 def init_deepseek_client():
     """初始化DeepSeek客户端"""
@@ -173,8 +174,7 @@ def initialize_symbol_data(symbol):
         price_history[symbol] = []
     if symbol not in signal_history:
         signal_history[symbol] = []
-    if symbol not in technical_history:
-        technical_history[symbol] = []
+    # technical_history 现在是全局列表，不需要按symbol初始化
     if symbol not in position_history:
         position_history[symbol] = []
     if symbol not in daily_performance:
